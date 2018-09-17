@@ -21,10 +21,11 @@ public class Main {
             tempSelectLogin = connection.prepareStatement("select * from accounts where login = ?");
             tempSelectAccount = connection.prepareStatement("select * from accounts where login = ? and password = ?");
             tempInsertAccount = connection.prepareStatement("insert into accounts values (null, ?, ?)");
-            tempInsertDate = connection.prepareStatement("insert into dates values (null, ?, ?, ?, ?, ?)");
-            tempSelectDateFromTime = connection.prepareStatement("select * from dates where day = ? and " +
+            tempInsertDate = connection.prepareStatement("insert into dates values (null, ?, ?, ?, ?, ?, ?, ?)");
+            tempSelectDateFromTime = connection.prepareStatement("select * from dates where id = ? and day = ? and " +
                                                                   "(minute_from <= ? and minute_to >= ?)");
-            tempSelectDateFromID = connection.prepareStatement("select * from dates where id = ?");
+            tempSelectDateFromID = connection.prepareStatement("select * from dates where account_id = ? and year = ? and " +
+                                                                    "month = ? and day = ?");
         } catch (SQLException e) {
             e.printStackTrace();
         }

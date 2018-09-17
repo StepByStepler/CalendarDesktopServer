@@ -25,7 +25,6 @@ public class UserIO extends Thread {
         while(true) {
             try {
                 String input = reader.readLine();
-                System.out.println("event: " + input);
                 if(input.startsWith("/register")) {
                     writer.write(operateRegister(input) + "\n");
                     writer.flush();
@@ -33,14 +32,15 @@ public class UserIO extends Thread {
                     writer.write(operateLogin(input) + "\n");
                     writer.flush();
                 } else if(input.startsWith("/add")) {
-                    System.out.println("in the add switch");
                     writer.write(operateAdd(input) + "\n");
                     writer.flush();
                 } else if(input.startsWith("/getdates")) {
                     ResultSet dates = getDates(input);
+                    System.out.println("trying: " + input);
                     while(dates.next()) {
-                        writer.write(String.format("/date%d~%d~%d~%s\n", dates.getInt("day"), dates.getInt("minute_from"),
-                                                                        dates.getInt("minute_to"), dates.getString("info")));
+                        System.out.println("sending");
+                        writer.write(String.format("/date%d~%d~%s\n", dates.getInt("minute_from"),
+                                dates.getInt("minute_to"), dates.getString("info")));
                         writer.flush();
                     }
                     writer.write("/end\n");
@@ -96,19 +96,24 @@ public class UserIO extends Thread {
     }
 
     private String operateAdd(String line) throws SQLException {
-        System.out.println("in the add");
         String[] args = line.replace("/add", "")
                             .replace("\n", "")
                             .split("~");
         int id = Integer.parseInt(args[0]);
-        int day = Integer.parseInt(args[1]);
-        int minuteFrom = Integer.parseInt(args[2]);
-        int minuteTo = Integer.parseInt(args[3]);
-        System.out.println(id + " " + day + " " + minuteFrom + " " + minuteTo + " " + args[4]);
+        int year = Integer.parseInt(args[1]);
+        int month = Integer.parseInt(args[2]);
+        int day = Integer.parseInt(args[3]);
+        int minuteFrom = Integer.parseInt(args[4]);
+        int minuteTo = Integer.parseInt(args[5]);
 
-        Main.selectDateFromTime.setInt(1, day);
-        Main.selectDateFromTime.setInt(2, minuteFrom);
+        if(minuteFrom < 0 || minuteTo < 0) {
+            return "/incorrecttime";
+        }
+
+        Main.selectDateFromTime.setInt(1, id);
+        Main.selectDateFromTime.setInt(2, day);
         Main.selectDateFromTime.setInt(3, minuteFrom);
+        Main.selectDateFromTime.setInt(4, minuteFrom);
         if(Main.selectDateFromTime.executeQuery().next()) {
             return "/dateexists";
         }
@@ -120,17 +125,30 @@ public class UserIO extends Thread {
         }
 
         Main.insertDate.setInt(1, id);
-        Main.insertDate.setInt(2, day);
-        Main.insertDate.setInt(3, minuteFrom);
-        Main.insertDate.setInt(4, minuteTo);
-        Main.insertDate.setString(5, args[4]);
+        Main.insertDate.setInt(2, year);
+        Main.insertDate.setInt(3, month);
+        Main.insertDate.setInt(4, day);
+        Main.insertDate.setInt(5, minuteFrom);
+        Main.insertDate.setInt(6, minuteTo);
+        Main.insertDate.setString(7, args[6]);
         Main.insertDate.executeUpdate();
         return "/success";
     }
 
     private ResultSet getDates(String line) throws SQLException {
-        int id = Integer.parseInt(line.replace("/getdates", ""));
+        String[] args = line.replace("/getdates", "")
+                            .replace("\n", "")
+                            .split("~");
+        int id = Integer.parseInt(args[0]);
+        int year = Integer.parseInt(args[1]);
+        int month = Integer.parseInt(args[2]);
+        int day = Integer.parseInt(args[3]);
+
         Main.selectDateFromID.setInt(1, id);
+        Main.selectDateFromID.setInt(2, year);
+        Main.selectDateFromID.setInt(3, month);
+        Main.selectDateFromID.setInt(4, day);
+
         return Main.selectDateFromID.executeQuery();
     }
 }
