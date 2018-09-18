@@ -11,21 +11,31 @@ public class Main {
     public static final PreparedStatement selectAccount;
     public static final PreparedStatement insertAccount;
     public static final PreparedStatement insertDate;
-    public static final PreparedStatement selectDateFromTime;
+    public static final PreparedStatement selectThisDateInsideOthers;
     public static final PreparedStatement selectDateFromID;
+    public static final PreparedStatement selectDatesInsideThisDate;
+    public static final PreparedStatement deleteDate;
     static {
         PreparedStatement tempSelectLogin = null, tempSelectAccount = null, tempInsertAccount = null, tempInsertDate = null,
-                          tempSelectDateFromTime = null, tempSelectDateFromID = null;
+                          tempSelectThisDateInsideOthers = null, tempSelectDateFromID = null, tempSelectDateInsideThisDate = null,
+                          tempDeleteDate = null;
         try {
             Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/calendar?useSSL=false", "root", "root");
             tempSelectLogin = connection.prepareStatement("select * from accounts where login = ?");
             tempSelectAccount = connection.prepareStatement("select * from accounts where login = ? and password = ?");
             tempInsertAccount = connection.prepareStatement("insert into accounts values (null, ?, ?)");
             tempInsertDate = connection.prepareStatement("insert into dates values (null, ?, ?, ?, ?, ?, ?, ?)");
-            tempSelectDateFromTime = connection.prepareStatement("select * from dates where id = ? and day = ? and " +
-                                                                  "(minute_from <= ? and minute_to >= ?)");
+            tempSelectThisDateInsideOthers = connection.prepareStatement("select * from dates where id = ? and year = ? and " +
+                                                                              "month = ? and day = ? and " +
+                                                                              "(minute_from <= ? and minute_to >= ?)");
             tempSelectDateFromID = connection.prepareStatement("select * from dates where account_id = ? and year = ? and " +
                                                                     "month = ? and day = ?");
+            tempSelectDateInsideThisDate = connection.prepareStatement("select * from dates where account_id = ? and year = ? and " +
+                                                                            "month = ? and day = ? and (" +
+                                                                            "(minute_from >= ? and minute_from <= ?) or" +
+                                                                            "(minute_to >= ? and minute_to <= ?))");
+            tempDeleteDate = connection.prepareStatement("delete from dates where account_id = ? and year = ? and " +
+                                                              "month = ? and day = ? and minute_from <= ? and minute_to >= ?");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -33,8 +43,10 @@ public class Main {
         selectAccount = tempSelectAccount;
         insertAccount = tempInsertAccount;
         insertDate = tempInsertDate;
-        selectDateFromTime = tempSelectDateFromTime;
+        selectThisDateInsideOthers = tempSelectThisDateInsideOthers;
         selectDateFromID = tempSelectDateFromID;
+        selectDatesInsideThisDate = tempSelectDateInsideThisDate;
+        deleteDate = tempDeleteDate;
     }
 
     public static void main(String[] args) throws SQLException, IOException {

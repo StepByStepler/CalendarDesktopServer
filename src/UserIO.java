@@ -36,18 +36,18 @@ public class UserIO extends Thread {
                     writer.flush();
                 } else if(input.startsWith("/getdates")) {
                     ResultSet dates = getDates(input);
-                    System.out.println("trying: " + input);
                     while(dates.next()) {
-                        System.out.println("sending");
                         writer.write(String.format("/date%d~%d~%s\n", dates.getInt("minute_from"),
                                 dates.getInt("minute_to"), dates.getString("info")));
                         writer.flush();
                     }
                     writer.write("/end\n");
                     writer.flush();
+                } else if(input.startsWith("/delete")) {
+                    writer.write(operateDelete(input) + "\n");
+                    writer.flush();
                 }
             } catch(SocketException e) {
-                System.out.println("returning");
                 return;
             } catch (IOException | SQLException e) {
                 e.printStackTrace();
@@ -110,17 +110,31 @@ public class UserIO extends Thread {
             return "/incorrecttime";
         }
 
-        Main.selectDateFromTime.setInt(1, id);
-        Main.selectDateFromTime.setInt(2, day);
-        Main.selectDateFromTime.setInt(3, minuteFrom);
-        Main.selectDateFromTime.setInt(4, minuteFrom);
-        if(Main.selectDateFromTime.executeQuery().next()) {
+        Main.selectThisDateInsideOthers.setInt(1, id);
+        Main.selectThisDateInsideOthers.setInt(2, year);
+        Main.selectThisDateInsideOthers.setInt(3, month);
+        Main.selectThisDateInsideOthers.setInt(4, day);
+        Main.selectThisDateInsideOthers.setInt(5, minuteFrom);
+        Main.selectThisDateInsideOthers.setInt(6, minuteFrom);
+        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
             return "/dateexists";
         }
 
-        Main.selectDateFromTime.setInt(2, minuteTo);
-        Main.selectDateFromTime.setInt(3, minuteTo);
-        if(Main.selectDateFromTime.executeQuery().next()) {
+        Main.selectThisDateInsideOthers.setInt(5, minuteTo);
+        Main.selectThisDateInsideOthers.setInt(6, minuteTo);
+        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
+            return "/dateexists";
+        }
+
+        Main.selectDatesInsideThisDate.setInt(1, id);
+        Main.selectDatesInsideThisDate.setInt(2, year);
+        Main.selectDatesInsideThisDate.setInt(3, month);
+        Main.selectDatesInsideThisDate.setInt(4, day);
+        Main.selectDatesInsideThisDate.setInt(5, minuteFrom);
+        Main.selectDatesInsideThisDate.setInt(6, minuteTo);
+        Main.selectDatesInsideThisDate.setInt(7, minuteFrom);
+        Main.selectDatesInsideThisDate.setInt(8, minuteTo);
+        if(Main.selectDatesInsideThisDate.executeQuery().next()) {
             return "/dateexists";
         }
 
@@ -150,5 +164,30 @@ public class UserIO extends Thread {
         Main.selectDateFromID.setInt(4, day);
 
         return Main.selectDateFromID.executeQuery();
+    }
+
+    private String operateDelete(String line) throws SQLException {
+        String[] args = line.replace("/delete", "")
+                            .replace("\n", "")
+                            .split("~");
+        int id = Integer.parseInt(args[0]);
+        int year = Integer.parseInt(args[1]);
+        int month = Integer.parseInt(args[2]);
+        int day = Integer.parseInt(args[3]);
+        int minute = Integer.parseInt(args[4]);
+
+        Main.deleteDate.setInt(1, id);
+        Main.deleteDate.setInt(2, year);
+        Main.deleteDate.setInt(3, month);
+        Main.deleteDate.setInt(4, day);
+        Main.deleteDate.setInt(5, minute);
+        Main.deleteDate.setInt(6, minute);
+
+        int changed = Main.deleteDate.executeUpdate();
+        if(changed > 0) {
+            return "/changed";
+        } else {
+            return "/notchanged";
+        }
     }
 }
