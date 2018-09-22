@@ -1,3 +1,5 @@
+import org.jetbrains.annotations.NotNull;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -45,6 +47,9 @@ public class UserIO extends Thread {
                     writer.flush();
                 } else if(input.startsWith("/delete")) {
                     writer.write(operateDelete(input) + "\n");
+                    writer.flush();
+                } else if(input.startsWith("/update")) {
+                    writer.write(operateUpdate(input) + "\n");
                     writer.flush();
                 }
             } catch(SocketException e) {
@@ -110,31 +115,7 @@ public class UserIO extends Thread {
             return "/incorrecttime";
         }
 
-        Main.selectThisDateInsideOthers.setInt(1, id);
-        Main.selectThisDateInsideOthers.setInt(2, year);
-        Main.selectThisDateInsideOthers.setInt(3, month);
-        Main.selectThisDateInsideOthers.setInt(4, day);
-        Main.selectThisDateInsideOthers.setInt(5, minuteFrom);
-        Main.selectThisDateInsideOthers.setInt(6, minuteFrom);
-        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
-            return "/dateexists";
-        }
-
-        Main.selectThisDateInsideOthers.setInt(5, minuteTo);
-        Main.selectThisDateInsideOthers.setInt(6, minuteTo);
-        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
-            return "/dateexists";
-        }
-
-        Main.selectDatesInsideThisDate.setInt(1, id);
-        Main.selectDatesInsideThisDate.setInt(2, year);
-        Main.selectDatesInsideThisDate.setInt(3, month);
-        Main.selectDatesInsideThisDate.setInt(4, day);
-        Main.selectDatesInsideThisDate.setInt(5, minuteFrom);
-        Main.selectDatesInsideThisDate.setInt(6, minuteTo);
-        Main.selectDatesInsideThisDate.setInt(7, minuteFrom);
-        Main.selectDatesInsideThisDate.setInt(8, minuteTo);
-        if(Main.selectDatesInsideThisDate.executeQuery().next()) {
+        if(dateAlreadyExists(-1, id, year, month, day, minuteFrom, minuteTo)) {
             return "/dateexists";
         }
 
@@ -189,5 +170,84 @@ public class UserIO extends Thread {
         } else {
             return "/notchanged";
         }
+    }
+
+    private String operateUpdate(String line) throws SQLException {
+        String[] args = line.replace("/update", "")
+                            .replace("\n", "")
+                            .split("~");
+        int account_id = Integer.parseInt(args[0]);
+        int year = Integer.parseInt(args[1]);
+        int month = Integer.parseInt(args[2]);
+        int day = Integer.parseInt(args[3]);
+
+        int oldMinuteFrom = Integer.parseInt(args[4]);
+        int oldMinuteTo = Integer.parseInt(args[5]);
+
+        int newMinuteFrom = Integer.parseInt(args[6]);
+        int newMinuteTo = Integer.parseInt(args[7]);
+
+        String oldText = args[8];
+        String newText = args[9];
+
+        Main.selectIdOfDate.setInt(1, account_id);
+        Main.selectIdOfDate.setInt(2, year);
+        Main.selectIdOfDate.setInt(3, month);
+        Main.selectIdOfDate.setInt(4, day);
+        Main.selectIdOfDate.setInt(5, oldMinuteFrom);
+        Main.selectIdOfDate.setInt(6, oldMinuteTo);
+        Main.selectIdOfDate.setString(7, oldText);
+
+        ResultSet resultId = Main.selectIdOfDate.executeQuery();
+        resultId.next();
+        int id = resultId.getInt("id");
+
+        if(dateAlreadyExists(id, account_id, year, month, day,  newMinuteFrom, newMinuteTo)) {
+            return "/dateexists";
+        }
+
+        Main.updateDate.setString(1, newText);
+        Main.updateDate.setInt(2, newMinuteFrom);
+        Main.updateDate.setInt(3, newMinuteTo);
+        Main.updateDate.setInt(4, account_id);
+        Main.updateDate.setInt(5, year);
+        Main.updateDate.setInt(6, month);
+        Main.updateDate.setInt(7, day);
+        Main.updateDate.setInt(8, oldMinuteFrom);
+        Main.updateDate.setInt(9, oldMinuteTo);
+
+        return "/success";
+    }
+
+    private boolean dateAlreadyExists(int id, int account_id, int year, int month, int day, int minuteFrom, int minuteTo) throws SQLException {
+        Main.selectThisDateInsideOthers.setInt(1, account_id);
+        Main.selectThisDateInsideOthers.setInt(2, year);
+        Main.selectThisDateInsideOthers.setInt(3, month);
+        Main.selectThisDateInsideOthers.setInt(4, day);
+        Main.selectThisDateInsideOthers.setInt(5, minuteFrom);
+        Main.selectThisDateInsideOthers.setInt(6, minuteFrom);
+        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
+            return true;
+        }
+
+        Main.selectThisDateInsideOthers.setInt(5, minuteTo);
+        Main.selectThisDateInsideOthers.setInt(6, minuteTo);
+        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
+            return true;
+        }
+
+        Main.selectDatesInsideThisDate.setInt(1, id);
+        Main.selectDatesInsideThisDate.setInt(2, account_id);
+        Main.selectDatesInsideThisDate.setInt(3, year);
+        Main.selectDatesInsideThisDate.setInt(4, month);
+        Main.selectDatesInsideThisDate.setInt(5, day);
+        Main.selectDatesInsideThisDate.setInt(6, minuteFrom);
+        Main.selectDatesInsideThisDate.setInt(7, minuteTo);
+        Main.selectDatesInsideThisDate.setInt(8, minuteFrom);
+        Main.selectDatesInsideThisDate.setInt(9, minuteTo);
+        if(Main.selectDatesInsideThisDate.executeQuery().next()) {
+            return true;
+        }
+        return false;
     }
 }
