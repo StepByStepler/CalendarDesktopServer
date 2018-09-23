@@ -216,6 +216,8 @@ public class UserIO extends Thread {
         Main.updateDate.setInt(8, oldMinuteFrom);
         Main.updateDate.setInt(9, oldMinuteTo);
 
+        Main.updateDate.executeUpdate();
+
         return "/success";
     }
 
