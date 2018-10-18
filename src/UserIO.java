@@ -1,25 +1,32 @@
-import org.jetbrains.annotations.NotNull;
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.math.BigInteger;
 import java.net.Socket;
 import java.net.SocketException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.regex.Pattern;
 
 public class UserIO extends Thread {
     private BufferedReader reader;
     private BufferedWriter writer;
     private static Pattern accountPattern = Pattern.compile("^[\\w\\d]+$");
+    private static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm");
 
     public UserIO(Socket socket) throws IOException {
         this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         this.writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-        start();
     }
 
     @Override
@@ -37,13 +44,14 @@ public class UserIO extends Thread {
                     writer.write(operateAdd(input) + "\n");
                     writer.flush();
                 } else if(input.startsWith("/getdates")) {
-                    ResultSet dates = getDates(input);
-                    while(dates.next()) {
-                        writer.write(String.format("/date%d~%d~%s\n", dates.getInt("minute_from"),
-                                dates.getInt("minute_to"), dates.getString("info")));
-                        writer.flush();
-                    }
-                    writer.write("/end\n");
+//                    ResultSet dates = loadDates(input);
+//                    while(dates.next()) {
+//                        writer.write(String.format("/date%d~%d~%s\n", dates.getInt("minute_from"),
+//                                dates.getInt("minute_to"), dates.getString("info")));
+//                        writer.flush();
+//                    }
+//                    writer.write("/end\n");
+                    loadDates(input);
                     writer.flush();
                 } else if(input.startsWith("/delete")) {
                     writer.write(operateDelete(input) + "\n");
@@ -54,7 +62,7 @@ public class UserIO extends Thread {
                 }
             } catch(SocketException e) {
                 return;
-            } catch (IOException | SQLException e) {
+            } catch (IOException | SQLException | ParseException e) {
                 e.printStackTrace();
             }
         }
@@ -79,7 +87,7 @@ public class UserIO extends Thread {
                 return "/unsuccess:loginExists";
             } else {
                 Main.insertAccount.setString(1, args[0]);
-                Main.insertAccount.setString(2, args[1]);
+                Main.insertAccount.setString(2, hashPassword(args[1]));
                 Main.insertAccount.executeUpdate();
                 return "/success";
             }
@@ -91,7 +99,7 @@ public class UserIO extends Thread {
                             .replace("\n", "")
                             .split(" ");
         Main.selectAccount.setString(1, args[0]);
-        Main.selectAccount.setString(2, args[1]);
+        Main.selectAccount.setString(2, hashPassword(args[1]));
         ResultSet resultSet = Main.selectAccount.executeQuery();
         if(!resultSet.next()) {
             return "/unsuccess";
@@ -100,69 +108,85 @@ public class UserIO extends Thread {
         }
     }
 
-    private String operateAdd(String line) throws SQLException {
+    private String operateAdd(String line) throws SQLException, ParseException {
         String[] args = line.replace("/add", "")
                             .replace("\n", "")
                             .split("~");
         int id = Integer.parseInt(args[0]);
-        int year = Integer.parseInt(args[1]);
-        int month = Integer.parseInt(args[2]);
-        int day = Integer.parseInt(args[3]);
-        int minuteFrom = Integer.parseInt(args[4]);
-        int minuteTo = Integer.parseInt(args[5]);
+        Calendar dateFrom = new Calendar.Builder().setInstant(dateFormat.parse(args[1])).build();
+        Calendar dateTo = new Calendar.Builder().setInstant(dateFormat.parse(args[2])).build();
 
-        if(minuteFrom < 0 || minuteTo < 0) {
+        System.out.println("dateFrom: " + dateFrom.getTime());
+        System.out.println("dateTo: " + dateTo.getTime());
+        String info = args[3];
+
+        if(dateFrom.get(Calendar.DAY_OF_MONTH) != dateTo.get(Calendar.DAY_OF_MONTH)
+                || dateFrom.get(Calendar.MONTH) != dateTo.get(Calendar.MONTH)
+                || dateFrom.get(Calendar.YEAR) != dateTo.get(Calendar.YEAR)) {
+            System.out.println("incorrect");
             return "/incorrecttime";
         }
 
-        if(dateAlreadyExists(-1, id, year, month, day, minuteFrom, minuteTo)) {
+        if(dateAlreadyExists(-1, id, dateFrom, dateTo)) {
+            System.out.println("dateExists");
             return "/dateexists";
         }
 
+        Timestamp date1 = new Timestamp(dateFrom.getTimeInMillis());
+        Timestamp date2 = new Timestamp(dateTo.getTimeInMillis());
+
         Main.insertDate.setInt(1, id);
-        Main.insertDate.setInt(2, year);
-        Main.insertDate.setInt(3, month);
-        Main.insertDate.setInt(4, day);
-        Main.insertDate.setInt(5, minuteFrom);
-        Main.insertDate.setInt(6, minuteTo);
-        Main.insertDate.setString(7, args[6]);
+        Main.insertDate.setTimestamp(2, date1);
+        Main.insertDate.setTimestamp(3, date2);
+        Main.insertDate.setString(4, info);
         Main.insertDate.executeUpdate();
         return "/success";
     }
 
-    private ResultSet getDates(String line) throws SQLException {
+    private void loadDates(String line) throws SQLException, ParseException, IOException {
         String[] args = line.replace("/getdates", "")
                             .replace("\n", "")
                             .split("~");
         int id = Integer.parseInt(args[0]);
-        int year = Integer.parseInt(args[1]);
-        int month = Integer.parseInt(args[2]);
-        int day = Integer.parseInt(args[3]);
+        Main.selectAllUserDates.setInt(1, id);
+        ResultSet allDates = Main.selectAllUserDates.executeQuery();
 
-        Main.selectDateFromID.setInt(1, id);
-        Main.selectDateFromID.setInt(2, year);
-        Main.selectDateFromID.setInt(3, month);
-        Main.selectDateFromID.setInt(4, day);
+        Date dateFrom = dateFormat.parse(args[1]);
+        Date dateTo = dateFormat.parse(args[2]);
 
-        return Main.selectDateFromID.executeQuery();
+        while(allDates.next()) {
+            Date currentFrom = new Date(allDates.getTimestamp("date_from").getTime());
+            Date currentTo = new Date(allDates.getTimestamp("date_to").getTime());
+
+            if(dateFrom.before(currentFrom) && dateTo.after(currentTo)) {
+                writer.write(String.format("/date%s~%s~%s\n", dateFormat.format(currentFrom),
+                        dateFormat.format(currentTo),
+                        allDates.getString("info")));
+                writer.flush();
+            }
+        }
+
+        writer.write("/end\n");
+        writer.flush();
     }
 
-    private String operateDelete(String line) throws SQLException {
+    private String operateDelete(String line) throws SQLException, ParseException {
         String[] args = line.replace("/delete", "")
                             .replace("\n", "")
                             .split("~");
         int id = Integer.parseInt(args[0]);
-        int year = Integer.parseInt(args[1]);
-        int month = Integer.parseInt(args[2]);
-        int day = Integer.parseInt(args[3]);
-        int minute = Integer.parseInt(args[4]);
+        Date dateFrom = dateFormat.parse(args[1]);
+        Date dateTo = dateFormat.parse(args[2]);
+
+        Timestamp timestampFrom = new Timestamp(dateFrom.getTime());
+        Timestamp timestampTo = new Timestamp(dateTo.getTime());
+
+        System.out.println("from: " + timestampFrom);
+        System.out.println("to: " + timestampTo);
 
         Main.deleteDate.setInt(1, id);
-        Main.deleteDate.setInt(2, year);
-        Main.deleteDate.setInt(3, month);
-        Main.deleteDate.setInt(4, day);
-        Main.deleteDate.setInt(5, minute);
-        Main.deleteDate.setInt(6, minute);
+        Main.deleteDate.setString(2, args[1]);
+        Main.deleteDate.setString(3, args[2]);
 
         int changed = Main.deleteDate.executeUpdate();
         if(changed > 0) {
@@ -172,84 +196,106 @@ public class UserIO extends Thread {
         }
     }
 
-    private String operateUpdate(String line) throws SQLException {
+    private String operateUpdate(String line) throws SQLException, ParseException {
         String[] args = line.replace("/update", "")
                             .replace("\n", "")
                             .split("~");
         int account_id = Integer.parseInt(args[0]);
-        int year = Integer.parseInt(args[1]);
-        int month = Integer.parseInt(args[2]);
-        int day = Integer.parseInt(args[3]);
 
-        int oldMinuteFrom = Integer.parseInt(args[4]);
-        int oldMinuteTo = Integer.parseInt(args[5]);
+        Calendar oldDateFrom = new Calendar.Builder().setInstant(dateFormat.parse(args[1])).build();
+        Calendar oldDateTo = new Calendar.Builder().setInstant(dateFormat.parse(args[2])).build();
 
-        int newMinuteFrom = Integer.parseInt(args[6]);
-        int newMinuteTo = Integer.parseInt(args[7]);
+        Calendar newDateFrom = new Calendar.Builder().setInstant(dateFormat.parse(args[3])).build();
+        Calendar newDateTo = new Calendar.Builder().setInstant(dateFormat.parse(args[4])).build();
 
-        String oldText = args[8];
-        String newText = args[9];
+        String oldText = args[5];
+        String newText = args[6];
 
         Main.selectIdOfDate.setInt(1, account_id);
-        Main.selectIdOfDate.setInt(2, year);
-        Main.selectIdOfDate.setInt(3, month);
-        Main.selectIdOfDate.setInt(4, day);
-        Main.selectIdOfDate.setInt(5, oldMinuteFrom);
-        Main.selectIdOfDate.setInt(6, oldMinuteTo);
-        Main.selectIdOfDate.setString(7, oldText);
+        Main.selectIdOfDate.setString(2, args[1]);
+        Main.selectIdOfDate.setString(3, args[2]);
+        Main.selectIdOfDate.setString(4, oldText);
 
         ResultSet resultId = Main.selectIdOfDate.executeQuery();
         resultId.next();
         int id = resultId.getInt("id");
 
-        if(dateAlreadyExists(id, account_id, year, month, day,  newMinuteFrom, newMinuteTo)) {
+        System.out.println("account id: " + account_id);
+        System.out.println("id: " + id + "\n");
+        System.out.println("oldFrom: " + oldDateFrom.getTime());
+        System.out.println("oldTo: " + oldDateTo.getTime() + "\n");
+        System.out.println("newFrom: " + newDateFrom.getTime());
+        System.out.println("newTo: " + newDateTo.getTime() + "\n");
+
+
+        if(dateAlreadyExists(id, account_id, newDateFrom, newDateTo)) {
             return "/dateexists";
         }
 
-        Main.updateDate.setString(1, newText);
-        Main.updateDate.setInt(2, newMinuteFrom);
-        Main.updateDate.setInt(3, newMinuteTo);
+        Main.updateDate.setTimestamp(1, new Timestamp(newDateFrom.getTimeInMillis()
+                                                                  + newDateFrom.getTimeZone().getRawOffset()));
+        Main.updateDate.setTimestamp(2, new Timestamp(newDateTo.getTimeInMillis()
+                                                                  + newDateTo.getTimeZone().getRawOffset()));
+        Main.updateDate.setString(3, newText);
         Main.updateDate.setInt(4, account_id);
-        Main.updateDate.setInt(5, year);
-        Main.updateDate.setInt(6, month);
-        Main.updateDate.setInt(7, day);
-        Main.updateDate.setInt(8, oldMinuteFrom);
-        Main.updateDate.setInt(9, oldMinuteTo);
+        Main.updateDate.setString(5, args[1]);
+        Main.updateDate.setString(6, args[2]);
+        Main.updateDate.setString(7, oldText);
 
         Main.updateDate.executeUpdate();
 
         return "/success";
     }
 
-    private boolean dateAlreadyExists(int id, int account_id, int year, int month, int day, int minuteFrom, int minuteTo) throws SQLException {
-        Main.selectThisDateInsideOthers.setInt(1, account_id);
-        Main.selectThisDateInsideOthers.setInt(2, year);
-        Main.selectThisDateInsideOthers.setInt(3, month);
-        Main.selectThisDateInsideOthers.setInt(4, day);
-        Main.selectThisDateInsideOthers.setInt(5, minuteFrom);
-        Main.selectThisDateInsideOthers.setInt(6, minuteFrom);
-        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
-            return true;
+    private boolean dateAlreadyExists(int id, int account_id, Calendar newDateFrom, Calendar newDateTo) throws SQLException {
+        newDateFrom.setTimeInMillis(newDateFrom.getTimeInMillis() - newDateFrom.getTimeZone().getRawOffset());
+        newDateTo.setTimeInMillis(newDateTo.getTimeInMillis() - newDateTo.getTimeZone().getRawOffset());
+
+        Main.selectAllUserDates.setInt(1, account_id);
+        ResultSet allDates = Main.selectAllUserDates.executeQuery();
+        while(allDates.next()) {
+            if(allDates.getInt("id") != id) {
+                Calendar dateFrom = new Calendar.Builder().setInstant(allDates.getTimestamp("date_from")).build();
+                Calendar dateTo = new Calendar.Builder().setInstant(allDates.getTimestamp("date_to")).build();
+
+                if ((dateFrom.before(newDateFrom) && dateTo.after(newDateFrom))
+                        || (dateFrom.before(newDateTo) && dateTo.after(newDateTo))) {
+                    return true;
+                }
+
+                if ((newDateFrom.before(dateFrom) && newDateTo.after(dateTo))
+                        || newDateFrom.before(dateTo) && newDateTo.after(dateTo)) {
+                    return true;
+                }
+            }
         }
 
-        Main.selectThisDateInsideOthers.setInt(5, minuteTo);
-        Main.selectThisDateInsideOthers.setInt(6, minuteTo);
-        if(Main.selectThisDateInsideOthers.executeQuery().next()) {
-            return true;
-        }
+        newDateFrom.setTimeInMillis(newDateFrom.getTimeInMillis() + newDateFrom.getTimeZone().getRawOffset());
+        newDateTo.setTimeInMillis(newDateTo.getTimeInMillis() + newDateTo.getTimeZone().getRawOffset());
 
-        Main.selectDatesInsideThisDate.setInt(1, id);
-        Main.selectDatesInsideThisDate.setInt(2, account_id);
-        Main.selectDatesInsideThisDate.setInt(3, year);
-        Main.selectDatesInsideThisDate.setInt(4, month);
-        Main.selectDatesInsideThisDate.setInt(5, day);
-        Main.selectDatesInsideThisDate.setInt(6, minuteFrom);
-        Main.selectDatesInsideThisDate.setInt(7, minuteTo);
-        Main.selectDatesInsideThisDate.setInt(8, minuteFrom);
-        Main.selectDatesInsideThisDate.setInt(9, minuteTo);
-        if(Main.selectDatesInsideThisDate.executeQuery().next()) {
-            return true;
-        }
         return false;
+    }
+
+    private String hashPassword(String password) {
+        MessageDigest messageDigest = null;
+        byte[] digest = new byte[0];
+
+        try {
+            messageDigest = MessageDigest.getInstance("MD5");
+            messageDigest.reset();
+            messageDigest.update(password.getBytes());
+            digest = messageDigest.digest();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+
+        BigInteger bigInt = new BigInteger(1, digest);
+        StringBuilder md5Hex = new StringBuilder(bigInt.toString(16));
+
+        while( md5Hex.length() < 32 ){
+            md5Hex.insert(0, "0");
+        }
+        return md5Hex.toString();
+
     }
 }
