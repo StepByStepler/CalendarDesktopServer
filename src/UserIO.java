@@ -88,6 +88,7 @@ public class UserIO extends Thread {
             } else {
                 Main.insertAccount.setString(1, args[0]);
                 Main.insertAccount.setString(2, hashPassword(args[1]));
+                Main.insertAccount.setString(3, args[2]);
                 Main.insertAccount.executeUpdate();
                 return "/success";
             }

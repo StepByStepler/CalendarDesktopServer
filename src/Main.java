@@ -23,7 +23,7 @@ public class Main {
             Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/calendar?useSSL=false", "root", "root");
             tempSelectLogin = connection.prepareStatement("select * from accounts where login = ?");
             tempSelectAccount = connection.prepareStatement("select * from accounts where login = ? and password = ?");
-            tempInsertAccount = connection.prepareStatement("insert into accounts values (null, ?, ?)");
+            tempInsertAccount = connection.prepareStatement("insert into accounts values (null, ?, ?, ?)");
             tempInsertDate = connection.prepareStatement("insert into dates values (null, ?, ?, ?, ?)");
             tempDeleteDate = connection.prepareStatement("delete from dates where account_id = ? and date_from = ? " +
                                                               "and date_to = ?");
